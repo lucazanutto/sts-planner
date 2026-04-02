@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>STS · Planner</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+  :root {
+    --accent: #c8d400;
+    --bg:    #111110;
+    --bg2:   #191917;
+    --bg3:   #212120;
+    --border:#2e2e2a;
+    --text:  #e0e0d8;
+    --text2: #a8a8a0;
+    --text3: #606058;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body {
+    height:100%; font-family:'Space Grotesk',sans-serif;
+    background:var(--bg); color:var(--text); overflow:hidden;
+  }
+
+  /* ── TOPBAR ── */
+  #topbar {
+    background:var(--bg2); border-bottom:2px solid rgba(200,212,0,.25);
+    padding:0 24px; display:flex; align-items:center; gap:16px;
+    height:56px; flex-shrink:0;
+  }
+  .topbar-logo {
+    font-family:'JetBrains Mono',monospace; font-size:13px; font-weight:700;
+    color:var(--accent); letter-spacing:.1em;
+  }
+  .topbar-title {
+    font-size:15px; font-weight:600; color:var(--text); flex:1;
+  }
+
+  /* ── CONTENT ── */
+  #content {
+    height:calc(100vh - 56px); overflow-y:auto; padding:20px 24px;
+  }
+  #content::-webkit-scrollbar { width:4px; }
+  #content::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+
+  /* ── TOAST ── */
+  #app-toast {
+    position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
+    background:#252523; border:1px solid #383835; border-radius:8px;
+    padding:10px 20px; font-size:12px; color:var(--accent); font-weight:600;
+    z-index:9999; opacity:0; transition:opacity .25s; pointer-events:none;
+    white-space:nowrap; box-shadow:0 4px 20px rgba(0,0,0,.5);
+  }
+  #app-toast.show { opacity:1; }
+
+  
+/* ── PLANNER VIEW ── */
+.planner-layout {
+  display:grid; grid-template-columns:280px 1fr;
+  gap:16px; height:calc(100vh - 160px); min-height:500px;
+}
+.planner-slots-panel {
+  background:#1e1e1c; border:1px solid #383835; border-radius:12px;
+  display:flex; flex-direction:column; overflow:hidden;
+}
+.planner-slots-hd {
+  padding:13px 16px; border-bottom:1px solid #2a2a28;
+  background:rgba(255,255,255,.02); flex-shrink:0;
+  display:flex; align-items:center; gap:8px;
+}
+.planner-slots-title { font-size:13px; font-weight:700; color:#e0e0d8; flex:1; }
+.planner-add-form {
+  padding:12px 14px; border-bottom:1px solid #2a2a28; flex-shrink:0;
+  display:flex; flex-direction:column; gap:8px;
+}
+.planner-add-input {
+  background:#252523; border:1px solid #383835; border-radius:7px;
+  color:#e0e0d8; font-size:12px; font-family:inherit; padding:7px 10px;
+  outline:none; width:100%; transition:border-color .15s; resize:none;
+}
+.planner-add-input:focus { border-color:var(--accent); }
+.planner-add-input::placeholder { color:#555550; }
+.planner-add-row { display:flex; gap:8px; align-items:center; }
+.planner-color-pick { width:28px; height:28px; border-radius:6px; border:1px solid #383835; cursor:pointer; padding:1px; background:transparent; flex-shrink:0; }
+.planner-add-btn { flex:1; padding:6px; background:rgba(200,212,0,0.1); color:var(--accent); border:1px solid rgba(200,212,0,0.3); border-radius:7px; font-size:11px; font-weight:700; font-family:inherit; cursor:pointer; }
+.planner-slots-list { flex:1; overflow-y:auto; padding:10px; display:flex; flex-direction:column; gap:6px; min-height:0; }
+.planner-slot { background:#252523; border:1px solid #383835; border-radius:8px; padding:10px 12px; cursor:grab; user-select:none; display:flex; align-items:flex-start; gap:8px; transition:border-color .12s; }
+.planner-slot:hover { border-color:#555550; }
+.planner-slot.dragging { opacity:.5; }
+.planner-slot-color { width:10px; height:10px; border-radius:3px; flex-shrink:0; margin-top:2px; }
+.planner-slot-text { font-size:12px; color:#c8c8be; line-height:1.4; flex:1; }
+.planner-slot-del { width:18px; height:18px; border-radius:4px; background:transparent; border:none; color:#444440; cursor:pointer; font-size:11px; flex-shrink:0; display:flex; align-items:center; justify-content:center; padding:0; }
+.planner-slot-del:hover { color:#f87171; }
+.planner-cal-panel { background:#1e1e1c; border:1px solid #383835; border-radius:12px; display:flex; flex-direction:column; overflow:hidden; }
+.planner-cal-hd { padding:13px 18px; border-bottom:1px solid #2a2a28; display:flex; align-items:center; gap:12px; flex-shrink:0; background:rgba(255,255,255,.02); }
+.planner-cal-title { font-size:13px; font-weight:700; color:#e0e0d8; flex:1; }
+.planner-nav-btn { width:28px; height:28px; background:#252523; border:1px solid #383835; border-radius:6px; color:#888880; cursor:pointer; font-size:13px; display:flex; align-items:center; justify-content:center; }
+.planner-nav-btn:hover { color:var(--accent); border-color:rgba(200,212,0,.35); }
+.planner-cal-body { flex:1; overflow-y:auto; padding:12px 14px; min-height:0; }
+.planner-view-toggle { display:flex; gap:4px; }
+.planner-view-btn { padding:4px 10px; border-radius:5px; font-size:10px; font-weight:600; font-family:inherit; cursor:pointer; border:1px solid #383835; background:transparent; color:#888880; }
+.planner-view-btn.active { background:rgba(200,212,0,.12); color:var(--accent); border-color:rgba(200,212,0,.3); }
+.planner-week-grid { display:grid; grid-template-columns:52px repeat(7,1fr); gap:2px; }
+.planner-week-hdr { padding:6px 4px; text-align:center; font-size:10px; font-weight:700; text-transform:uppercase; color:#555550; }
+.planner-week-hdr.today-hdr { color:var(--accent); }
+.planner-time-label { font-size:9px; color:#444440; font-family:'JetBrains Mono',monospace; padding:4px 6px 4px 0; text-align:right; height:52px; display:flex; align-items:flex-start; padding-top:4px; }
+.planner-cell { min-height:52px; height:52px; border-radius:5px; border:1px solid #272725; background:#191917; padding:2px; overflow:hidden; display:flex; flex-direction:column; gap:2px; }
+.planner-cell.drag-over { background:rgba(200,212,0,0.08) !important; border-color:rgba(200,212,0,.4) !important; }
+.planner-cell.today { border-color:rgba(200,212,0,.25); background:#1d1e1a; }
+.planner-cell-item { border-radius:4px; padding:2px 5px; font-size:10px; font-weight:600; color:#1d1d1b; cursor:grab; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex-shrink:0; }
+.planner-cell-item:hover { filter:brightness(1.15); }
+.planner-month-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:3px; }
+.planner-month-cell { min-height:80px; border-radius:6px; border:1px solid #272725; background:#191917; padding:4px 6px; display:flex; flex-direction:column; gap:2px; }
+.planner-month-cell.drag-over { background:rgba(200,212,0,0.08) !important; border-color:rgba(200,212,0,.4) !important; }
+.planner-month-cell.today { border-color:rgba(200,212,0,.25); }
+.planner-month-cell.other-month { opacity:.35; }
+.planner-day-num { font-size:11px; font-weight:600; color:#666660; margin-bottom:2px; }
+.planner-day-num.today-num { color:var(--accent); }
+@media(max-width:900px) { .planner-layout { grid-template-columns:240px 1fr; } }
+@media(max-width:600px) {
+  .planner-layout { grid-template-columns:1fr; grid-template-rows:auto 1fr; height:auto; }
+  .planner-slots-panel { max-height:280px; }
+  .planner-cal-panel { min-height:340px; }
+  .planner-month-cell { min-height:52px; }
+}
+
+
+  /* Mobile */
+  @media(max-width:600px) {
+    #topbar { padding:0 14px; height:48px; }
+    #content { padding:12px 12px; height:calc(100vh - 48px); }
+    .planner-layout { grid-template-columns:1fr; grid-template-rows:auto 1fr; height:auto; }
+    .planner-slots-panel { max-height:280px; }
+    .planner-cal-panel { min-height:340px; }
+    .planner-month-cell { min-height:52px; }
+    .planner-week-grid { grid-template-columns:36px repeat(7,1fr); }
+    .planner-time-label { font-size:8px; }
+    .planner-cell { min-height:40px; height:40px; }
+  }
+
+  /* ── TASK EDIT MODAL ── */
+  #task-modal-overlay {
+    display:none; position:fixed; inset:0; background:rgba(0,0,0,.7);
+    z-index:1000; align-items:center; justify-content:center;
+  }
+  #task-modal-overlay.open { display:flex; }
+  #task-modal-box {
+    background:#1a1a18; border:1px solid #383835; border-radius:14px;
+    width:min(460px,95vw); padding:24px; display:flex; flex-direction:column;
+    gap:16px; box-shadow:0 20px 60px rgba(0,0,0,.8);
+  }
+  .tm-title { font-size:15px; font-weight:700; color:#e8e8e0; }
+  .tm-field { display:flex; flex-direction:column; gap:6px; }
+  .tm-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:#666660; }
+  .tm-input {
+    background:#252523; border:1px solid #383835; border-radius:8px;
+    color:#e0e0d8; font-size:13px; font-family:inherit; padding:8px 12px;
+    outline:none; transition:border-color .15s, box-shadow .15s; width:100%;
+  }
+  .tm-input:focus { border-color:var(--accent); box-shadow:0 0 0 2px rgba(200,212,0,.1); }
+  .tm-input::placeholder { color:#555550; }
+  textarea.tm-input { resize:vertical; min-height:70px; }
+  .tm-date-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .tm-color-row { display:flex; align-items:center; gap:12px; }
+  .tm-color-pick { width:36px; height:36px; border-radius:8px; border:1px solid #383835; cursor:pointer; padding:2px; background:transparent; }
+  .tm-color-swatches { display:flex; gap:6px; flex-wrap:wrap; }
+  .tm-swatch {
+    width:24px; height:24px; border-radius:6px; cursor:pointer;
+    border:2px solid transparent; transition:all .12s;
+  }
+  .tm-swatch:hover { transform:scale(1.15); }
+  .tm-swatch.active { border-color:#fff; }
+  .tm-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:4px; }
+  .tm-btn-cancel {
+    padding:8px 18px; background:transparent; border:1px solid #383835;
+    border-radius:8px; color:#888880; font-size:12px; font-family:inherit; cursor:pointer;
+  }
+  .tm-btn-cancel:hover { border-color:#555550; color:#c8c8be; }
+  .tm-btn-save {
+    padding:8px 22px; background:var(--accent); color:#1d1d1b;
+    border:none; border-radius:8px; font-size:12px; font-weight:800;
+    font-family:inherit; cursor:pointer; transition:all .15s;
+    box-shadow:0 2px 12px rgba(200,212,0,.3);
+  }
+  .tm-btn-save:hover { background:#dde800; transform:translateY(-1px); }
+  .tm-btn-delete {
+    padding:8px 14px; background:transparent; border:1px solid rgba(248,113,113,.3);
+    border-radius:8px; color:#f87171; font-size:12px; font-family:inherit; cursor:pointer;
+    margin-right:auto; transition:all .15s;
+  }
+  .tm-btn-delete:hover { background:rgba(248,113,113,.08); }
+
+  /* ── SUPABASE SYNC BAR ── */
+  #sync-bar {
+    display:flex; align-items:center; gap:10px; padding:8px 16px;
+    background:#161614; border-bottom:1px solid #2a2a28; flex-shrink:0;
+    font-size:11px;
+  }
+  .sync-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; transition:background .3s; }
+  .sync-dot.offline  { background:#555550; }
+  .sync-dot.ok       { background:#22c55e; box-shadow:0 0 5px #22c55e88; }
+  .sync-dot.syncing  { background:#f59e0b; animation:sdPulse .7s infinite; }
+  .sync-dot.error    { background:#f87171; }
+  @keyframes sdPulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+  .sync-txt { color:#888880; flex:1; }
+  .sync-btn {
+    padding:4px 12px; border-radius:6px; font-size:10px; font-weight:700;
+    font-family:inherit; cursor:pointer; border:1px solid; transition:all .12s;
+  }
+  .sync-btn-up   { background:rgba(200,212,0,.1); color:var(--accent); border-color:rgba(200,212,0,.3); }
+  .sync-btn-up:hover { background:rgba(200,212,0,.2); }
+  .sync-btn-down { background:rgba(96,165,250,.1); color:#60a5fa; border-color:rgba(96,165,250,.3); }
+  .sync-btn-down:hover { background:rgba(96,165,250,.2); }
+</style>
+</head>
+<body>
+<div style="display:flex;flex-direction:column;height:100vh">
+  <div id="topbar">
+    <span class="topbar-logo">STS</span>
+    <span class="topbar-title">Planner Team</span>
+  </div>
+  <div id="sync-bar"><div class="sync-dot offline" id="sync-dot"></div><span class="sync-txt" id="sync-txt">Non sincronizzato</span><button class="sync-btn sync-btn-down" onclick="sbDownload()">⬇ Scarica</button><button class="sync-btn sync-btn-up" onclick="sbUpload()">⬆ Salva</button></div>
+  <div id="content"></div>
+</div>
+<div id="app-toast"></div>
+
+<script>
+
+function lsGet(k)    { try { return JSON.parse(localStorage.getItem(k)); } catch(e){ return null; } }
+function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} }
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function showToast(msg) {
+  let t = document.getElementById('app-toast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'app-toast';
+    t.style.cssText = `position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+      background:var(--accent);color:var(--sts-dark);padding:10px 20px;border-radius:8px;
+      font-size:12px;font-weight:700;font-family:inherit;z-index:2000;
+      box-shadow:0 4px 20px rgba(0,0,0,0.4);transition:opacity .3s;white-space:nowrap`;
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.opacity = '1';
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.style.opacity = '0', 3500);
+}
+
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PLANNER
+// ═══════════════════════════════════════════════════════════════════════════
+const PLANNER_PEOPLE = [
+  {id:'enea',     name:'Enea Bruni',     color:'#818cf8'},
+  {id:'raffaele', name:'Raffaele Pulliè',color:'#f59e0b'},
+  {id:'riccardo', name:'Riccardo Nessi', color:'#22c55e'},
+  {id:'luca',     name:'Luca Zanutto',   color:'#f472b6'},
+];
+const SWATCHES = ['#818cf8','#f59e0b','#22c55e','#f472b6','#f87171','#60a5fa','#34d399','#fbbf24','#c8d400','#e879f9'];
+const PLANNER_VIEW_KEY   = 'sts_planner_view';
+const PLANNER_PERSON_KEY = 'sts_planner_person';
+let _plannerView   = 'month';
+let _plannerDate   = new Date();
+let _plannerPerson = null;
+let _dragSlotId    = null;
+let _dragFrom      = null;
+let _dragFromCell  = null;
+
+function plannerPersonKey(pid)  { return 'sts_planner_slots_'+pid; }
+function plannerCalKey(pid)     { return 'sts_planner_cal_'+pid; }
+function plannerGetSlots(pid)   { return lsGet(plannerPersonKey(pid))  || []; }
+function plannerSaveSlots(pid,s){ lsSet(plannerPersonKey(pid), s); }
+function plannerGetCal(pid)     { return lsGet(plannerCalKey(pid))     || {}; }
+function plannerSaveCal(pid,c)  { lsSet(plannerCalKey(pid), c); }
+function plannerGetPerson()     { return _plannerPerson || lsGet(PLANNER_PERSON_KEY) || PLANNER_PEOPLE[0].id; }
+function plannerSetPerson(pid)  { _plannerPerson=pid; lsSet(PLANNER_PERSON_KEY,pid); render(); }
+
+// ── Date range: expand slot across multiple days in calendar ─────────────────
+function _dateKey(d) {
+  if(typeof d === 'string') return d;
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+
+function _expandSlotDates(slot) {
+  // Returns array of date keys this slot covers
+  if(!slot.dateStart) return [];
+  const keys = [];
+  const start = new Date(slot.dateStart+'T00:00:00');
+  const end   = slot.dateEnd ? new Date(slot.dateEnd+'T00:00:00') : start;
+  for(let d = new Date(start); d <= end; d.setDate(d.getDate()+1)) {
+    keys.push(_dateKey(new Date(d)));
+  }
+  return keys;
+}
+
+// ── MODAL ────────────────────────────────────────────────────────────────────
+let _tmEditSlotId  = null;
+let _tmEditPersonId = null;
+
+function tmOpen(pid, slotId) {
+  _tmEditPersonId = pid;
+  _tmEditSlotId   = slotId;
+  const isNew = !slotId;
+
+  const slots  = plannerGetSlots(pid);
+  const person = PLANNER_PEOPLE.find(p=>p.id===pid) || PLANNER_PEOPLE[0];
+  const slot   = slotId ? slots.find(s=>s.id===slotId) : null;
+
+  document.getElementById('tm-title-text').textContent = isNew ? '＋ Nuovo task' : '✎ Modifica task';
+  document.getElementById('tm-text').value = slot ? slot.text : '';
+  document.getElementById('tm-date-start').value = slot?.dateStart || _dateKey(_plannerDate);
+  document.getElementById('tm-date-end').value   = slot?.dateEnd   || '';
+  document.getElementById('tm-color').value      = slot?.color || person.color;
+  document.getElementById('tm-delete-btn').style.display = isNew ? 'none' : '';
+
+  // Render swatches
+  const sw = document.getElementById('tm-swatches');
+  sw.innerHTML = SWATCHES.map(c => `
+    <div class="tm-swatch${(slot?.color||person.color)===c?' active':''}"
+      style="background:${c}"
+      onclick="document.getElementById('tm-color').value='${c}';document.querySelectorAll('.tm-swatch').forEach(s=>s.classList.remove('active'));this.classList.add('active')">
+    </div>`).join('');
+
+  document.getElementById('task-modal-overlay').classList.add('open');
+  setTimeout(()=>document.getElementById('tm-text').focus(), 100);
+}
+
+function tmClose() {
+  document.getElementById('task-modal-overlay').classList.remove('open');
+  _tmEditSlotId = null; _tmEditPersonId = null;
+}
+
+function tmSave() {
+  const pid   = _tmEditPersonId || plannerGetPerson();
+  const text  = document.getElementById('tm-text').value.trim();
+  if(!text) { document.getElementById('tm-text').style.borderColor='#f87171'; setTimeout(()=>document.getElementById('tm-text').style.borderColor='',800); return; }
+  const color     = document.getElementById('tm-color').value;
+  const dateStart = document.getElementById('tm-date-start').value;
+  const dateEnd   = document.getElementById('tm-date-end').value;
+
+  const slots = plannerGetSlots(pid);
+  const cal   = plannerGetCal(pid);
+
+  if(_tmEditSlotId) {
+    // Edit existing — remove old calendar entries first
+    const old = slots.find(s=>s.id===_tmEditSlotId);
+    if(old) {
+      _expandSlotDates(old).forEach(k=>{
+        if(cal[k]) { cal[k]=cal[k].filter(i=>i.id!==_tmEditSlotId); if(!cal[k].length)delete cal[k]; }
+      });
+    }
+    const idx = slots.findIndex(s=>s.id===_tmEditSlotId);
+    if(idx>=0) slots[idx] = {id:_tmEditSlotId, text, color, dateStart, dateEnd};
+    // Re-add to calendar for all dates
+    if(dateStart) {
+      const updated = slots[idx];
+      _expandSlotDates(updated).forEach(k=>{
+        if(!cal[k]) cal[k]=[];
+        if(!cal[k].find(i=>i.id===_tmEditSlotId))
+          cal[k].push({id:_tmEditSlotId, text, color});
+      });
+    }
+  } else {
+    // New slot
+    const id = 'ps'+Date.now();
+    slots.push({id, text, color, dateStart, dateEnd});
+    if(dateStart) {
+      const newSlot = {id, text, color, dateStart, dateEnd};
+      _expandSlotDates(newSlot).forEach(k=>{
+        if(!cal[k]) cal[k]=[];
+        cal[k].push({id, text, color});
+      });
+    }
+  }
+
+  plannerSaveSlots(pid, slots);
+  plannerSaveCal(pid, cal);
+  tmClose();
+  render();
+}
+
+function tmDelete() {
+  if(!_tmEditSlotId||!_tmEditPersonId) return;
+  const pid   = _tmEditPersonId;
+  const id    = _tmEditSlotId;
+  const slots = plannerGetSlots(pid);
+  const slot  = slots.find(s=>s.id===id);
+  const cal   = plannerGetCal(pid);
+  if(slot) {
+    _expandSlotDates(slot).forEach(k=>{
+      if(cal[k]){cal[k]=cal[k].filter(i=>i.id!==id);if(!cal[k].length)delete cal[k];}
+    });
+  }
+  plannerSaveSlots(pid, slots.filter(s=>s.id!==id));
+  plannerSaveCal(pid, cal);
+  tmClose();
+  render();
+}
+
+// ── RENDER ────────────────────────────────────────────────────────────────────
+function renderPlannerView() {
+  _plannerView   = lsGet(PLANNER_VIEW_KEY) || 'month';
+  _plannerPerson = plannerGetPerson();
+  const person   = PLANNER_PEOPLE.find(p=>p.id===_plannerPerson) || PLANNER_PEOPLE[0];
+  const slots    = plannerGetSlots(_plannerPerson);
+  const monthNames = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+  const navLabel = _plannerView==='month'
+    ? monthNames[_plannerDate.getMonth()]+' '+_plannerDate.getFullYear()
+    : 'Settimana del '+_getWeekLabel();
+
+  const slotsHtml = slots.length===0
+    ? '<div style="text-align:center;color:#444440;font-size:11px;padding:20px;font-style:italic">Nessun task.<br>Clicca ＋ per aggiungerne uno.</div>'
+    : slots.map(s=>{
+        const dateInfo = s.dateStart ? `<div style="font-size:9px;color:#555550;font-family:\'JetBrains Mono\',monospace;margin-top:2px">${s.dateStart}${s.dateEnd&&s.dateEnd!==s.dateStart?' → '+s.dateEnd:''}</div>` : '';
+        return `<div class="planner-slot" id="pslot-${s.id}" draggable="true"
+          ondragstart="plannerDragStart(event,'panel','${s.id}')"
+          ontouchstart="plannerTouchStart(event,'panel','${s.id}')"
+          ontouchmove="plannerTouchMove(event)" ontouchend="plannerTouchEnd(event)">
+          <div class="planner-slot-color" style="background:${s.color}"></div>
+          <div class="planner-slot-text">${escHtml(s.text)}${dateInfo}</div>
+          <button class="planner-slot-del" onclick="tmOpen('${person.id}','${s.id}')" title="Modifica">✎</button>
+        </div>`;
+      }).join('');
+
+  const personTabs = PLANNER_PEOPLE.map(p=>`
+    <button onclick="plannerSetPerson('${p.id}')"
+      style="padding:6px 14px;border-radius:20px;font-size:11px;font-weight:700;font-family:inherit;cursor:pointer;white-space:nowrap;border:1px solid;transition:all .15s;
+        ${p.id===_plannerPerson
+          ? 'background:'+p.color+';color:#1d1d1b;border-color:'+p.color
+          : 'background:transparent;color:#888880;border-color:#383835'}">
+      ${escHtml(p.name)}
+    </button>`).join('');
+
+  return `<div style="display:flex;flex-direction:column;gap:12px;height:calc(100vh - 100px)">
+    <div style="display:flex;gap:8px;flex-shrink:0;flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px">${personTabs}</div>
+    <div class="planner-layout" style="flex:1;min-height:0">
+      <div class="planner-slots-panel">
+        <div class="planner-slots-hd">
+          <div style="width:10px;height:10px;border-radius:50%;background:${person.color};flex-shrink:0"></div>
+          <span class="planner-slots-title">${escHtml(person.name)}</span>
+          <span style="font-size:10px;color:#555550;margin-right:4px">${slots.length} task</span>
+          <button onclick="tmOpen('${person.id}',null)"
+            style="padding:3px 10px;background:rgba(200,212,0,.1);color:var(--accent);border:1px solid rgba(200,212,0,.3);border-radius:6px;font-size:11px;font-weight:700;font-family:inherit;cursor:pointer;">＋</button>
+        </div>
+        <div id="planner-slots-dropzone"
+          style="font-size:10px;color:#444440;text-align:center;padding:6px;border-bottom:1px dashed #2a2a28;flex-shrink:0;transition:all .15s"
+          ondragover="event.preventDefault();this.style.background='rgba(200,212,0,0.06)';this.style.color='var(--accent)'"
+          ondragleave="this.style.background='';this.style.color='#444440'"
+          ondrop="plannerDropBackToPanel(event);this.style.background='';this.style.color='#444440'">
+          ← rilascia qui per togliere dal calendario
+        </div>
+        <div class="planner-slots-list">${slotsHtml}</div>
+      </div>
+      <div class="planner-cal-panel">
+        <div class="planner-cal-hd">
+          <div class="planner-view-toggle">
+            <button class="planner-view-btn${_plannerView==='month'?' active':''}" onclick="plannerSetView('month')">Mese</button>
+            <button class="planner-view-btn${_plannerView==='week'?' active':''}" onclick="plannerSetView('week')">Settimana</button>
+          </div>
+          <span class="planner-cal-title">${navLabel}</span>
+          <button class="planner-nav-btn" onclick="plannerNav(-1)">◀</button>
+          <button class="planner-nav-btn" onclick="plannerNav(1)">▶</button>
+          <button class="planner-nav-btn" onclick="plannerNavToday()" style="font-size:9px;width:auto;padding:0 8px">Oggi</button>
+        </div>
+        <div class="planner-cal-body">
+          ${_plannerView==='month'?_renderPlannerMonth():_renderPlannerWeek()}
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function _hexToRgb(hex){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return r+','+g+','+b;}
+function _getWeekLabel(){const d=new Date(_plannerDate);d.setDate(d.getDate()-(d.getDay()===0?6:d.getDay()-1));return d.getDate()+'/'+(d.getMonth()+1)+'/'+d.getFullYear();}
+
+function _renderPlannerMonth(){
+  const allCals={};
+  PLANNER_PEOPLE.forEach(p=>{const c=plannerGetCal(p.id);Object.keys(c).forEach(k=>{if(!allCals[k])allCals[k]=[];allCals[k]=allCals[k].concat(c[k]);});});
+  const today=new Date();today.setHours(0,0,0,0);
+  const year=_plannerDate.getFullYear(),month=_plannerDate.getMonth();
+  const first=new Date(year,month,1),last=new Date(year,month+1,0);
+  const dayNames=['Lu','Ma','Me','Gi','Ve','Sa','Do'];
+  let html='<div class="planner-month-grid">';
+  dayNames.forEach(d=>{html+=`<div class="planner-week-hdr">${d}</div>`;});
+  let startDow=first.getDay();startDow=startDow===0?6:startDow-1;
+  for(let i=0;i<startDow;i++) html+='<div class="planner-month-cell other-month"></div>';
+  for(let d2=1;d2<=last.getDate();d2++){
+    const date=new Date(year,month,d2);date.setHours(0,0,0,0);
+    const key=_dateKey(date),isToday=date.getTime()===today.getTime();
+    const items=allCals[key]||[];
+    html+=`<div class="planner-month-cell${isToday?' today':''}"
+      ondragover="event.preventDefault();this.classList.add('drag-over')"
+      ondragleave="this.classList.remove('drag-over')"
+      ondrop="plannerDrop(event,'${key}',this)">
+      <div class="planner-day-num${isToday?' today-num':''}">${d2}</div>
+      ${items.map((item,i)=>`<div class="planner-cell-item" style="background:${item.color};cursor:pointer"
+        draggable="true"
+        ondragstart="plannerDragStart(event,'cell-${key}-${i}','${item.id}')"
+        ontouchstart="plannerTouchStart(event,'cell-${key}-${i}','${item.id}')"
+        ontouchmove="plannerTouchMove(event)" ontouchend="plannerTouchEnd(event)"
+        ondblclick="tmOpenFromCal('${item.id}')"
+        title="${escHtml(item.text)}">${escHtml(item.text.length>18?item.text.slice(0,16)+'…':item.text)}</div>`).join('')}
+    </div>`;
+  }
+  const used=startDow+last.getDate();const trailing=used%7===0?0:7-(used%7);
+  for(let i=0;i<trailing;i++) html+='<div class="planner-month-cell other-month"></div>';
+  html+='</div>';return html;
+}
+
+function _renderPlannerWeek(){
+  const allCals={};
+  PLANNER_PEOPLE.forEach(p=>{const c=plannerGetCal(p.id);Object.keys(c).forEach(k=>{if(!allCals[k])allCals[k]=[];allCals[k]=allCals[k].concat(c[k]);});});
+  const today=new Date();today.setHours(0,0,0,0);
+  const anchor=new Date(_plannerDate);anchor.setDate(anchor.getDate()-(anchor.getDay()===0?6:anchor.getDay()-1));anchor.setHours(0,0,0,0);
+  const dayNames=['Lu','Ma','Me','Gi','Ve','Sa','Do'];
+  const hours=[];for(let h=7;h<=23;h++) hours.push(h);
+  let html='<div class="planner-week-grid"><div class="planner-week-hdr"></div>';
+  for(let d=0;d<7;d++){const day=new Date(anchor);day.setDate(anchor.getDate()+d);const isToday=day.getTime()===today.getTime();html+=`<div class="planner-week-hdr${isToday?' today-hdr':''}">${dayNames[d]}<br><span style="font-size:11px;color:${isToday?'var(--accent)':'#888880'}">${day.getDate()}</span></div>`;}
+  hours.forEach(h=>{
+    html+=`<div class="planner-time-label">${String(h).padStart(2,'0')}:00</div>`;
+    for(let d=0;d<7;d++){const day=new Date(anchor);day.setDate(anchor.getDate()+d);const key=_dateKey(day)+'-h'+h;const isToday=day.getTime()===today.getTime();const items=allCals[key]||[];
+      html+=`<div class="planner-cell${isToday?' today':''}"
+        ondragover="event.preventDefault();this.classList.add('drag-over')"
+        ondragleave="this.classList.remove('drag-over')"
+        ondrop="plannerDrop(event,'${key}',this)">
+        ${items.map((item,i)=>`<div class="planner-cell-item" style="background:${item.color};cursor:pointer"
+          draggable="true"
+          ondragstart="plannerDragStart(event,'cell-${key}-${i}','${item.id}')"
+          ontouchstart="plannerTouchStart(event,'cell-${key}-${i}','${item.id}')"
+          ontouchmove="plannerTouchMove(event)" ontouchend="plannerTouchEnd(event)"
+          ondblclick="tmOpenFromCal('${item.id}')"
+          title="${escHtml(item.text)}">${escHtml(item.text.length>10?item.text.slice(0,8)+'…':item.text)}</div>`).join('')}
+      </div>`;
+    }
+  });
+  html+='</div>';return html;
+}
+
+function tmOpenFromCal(slotId) {
+  // Find which person owns this slot
+  for(const p of PLANNER_PEOPLE) {
+    const slot = plannerGetSlots(p.id).find(s=>s.id===slotId);
+    if(slot) { tmOpen(p.id, slotId); return; }
+  }
+}
+
+function plannerAddSlot(){
+  // Now replaced by tmOpen
+  tmOpen(plannerGetPerson(), null);
+}
+function plannerDelSlot(id){const pid=plannerGetPerson();plannerSaveSlots(pid,plannerGetSlots(pid).filter(s=>s.id!==id));const cal=plannerGetCal(pid);Object.keys(cal).forEach(k=>{cal[k]=cal[k].filter(i=>i.id!==id);if(!cal[k].length)delete cal[k];});plannerSaveCal(pid,cal);render();}
+function plannerSetView(v){_plannerView=v;lsSet(PLANNER_VIEW_KEY,v);render();}
+function plannerNav(dir){if(_plannerView==='month')_plannerDate.setMonth(_plannerDate.getMonth()+dir);else _plannerDate.setDate(_plannerDate.getDate()+dir*7);render();}
+function plannerNavToday(){_plannerDate=new Date();render();}
+function plannerDragStart(event,source,slotId){_dragSlotId=slotId;_dragFrom=source.startsWith('cell-')?'cell':'panel';if(_dragFrom==='cell'){const lastDash=source.lastIndexOf('-');_dragFromCell=source.slice(5,lastDash);}event.dataTransfer.effectAllowed='move';event.dataTransfer.setData('text/plain',slotId);}
+function plannerDrop(event,cellKey,cellEl){event.preventDefault();cellEl.classList.remove('drag-over');if(!_dragSlotId)return;const pid=plannerGetPerson();const slots=plannerGetSlots(pid);let slot=slots.find(s=>s.id===_dragSlotId);const cal=plannerGetCal(pid);if(!cal[cellKey])cal[cellKey]=[];if(_dragFrom==='cell'&&_dragFromCell&&cal[_dragFromCell]){cal[_dragFromCell]=cal[_dragFromCell].filter(i=>i.id!==_dragSlotId);if(!cal[_dragFromCell].length)delete cal[_dragFromCell];}if(!slot){for(const k of Object.keys(cal)){const f=cal[k].find(i=>i.id===_dragSlotId);if(f){slot=f;break;}}}if(!slot)slot={id:_dragSlotId,text:'Task',color:'#c8d400'};if(!cal[cellKey].find(i=>i.id===_dragSlotId))cal[cellKey].push({id:slot.id,text:slot.text,color:slot.color});plannerSaveCal(pid,cal);_dragSlotId=null;_dragFrom=null;_dragFromCell=null;render();}
+function plannerDropBackToPanel(event){event.preventDefault();if(!_dragSlotId||_dragFrom!=='cell')return;const pid=plannerGetPerson();const cal=plannerGetCal(pid);if(_dragFromCell&&cal[_dragFromCell]){cal[_dragFromCell]=cal[_dragFromCell].filter(i=>i.id!==_dragSlotId);if(!cal[_dragFromCell].length)delete cal[_dragFromCell];plannerSaveCal(pid,cal);}_dragSlotId=null;_dragFrom=null;_dragFromCell=null;render();}
+
+let _touchDragEl=null,_touchClone=null,_touchStartX=0,_touchStartY=0;
+function plannerTouchStart(event,source,slotId){const touch=event.touches[0];_touchStartX=touch.clientX;_touchStartY=touch.clientY;_dragSlotId=slotId;_dragFrom=source.startsWith('cell-')?'cell':'panel';if(_dragFrom==='cell'){const lastDash=source.lastIndexOf('-');_dragFromCell=source.slice(5,lastDash);}_touchDragEl=event.currentTarget;const rect=_touchDragEl.getBoundingClientRect();_touchClone=_touchDragEl.cloneNode(true);_touchClone.style.cssText=`position:fixed;z-index:9999;pointer-events:none;opacity:.85;width:${rect.width}px;left:${rect.left}px;top:${rect.top}px;border:2px solid var(--accent);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.5);`;document.body.appendChild(_touchClone);_touchDragEl.style.opacity='.4';}
+function plannerTouchMove(event){if(!_touchClone)return;event.preventDefault();const touch=event.touches[0];const rect=_touchDragEl.getBoundingClientRect();const dx=touch.clientX-_touchStartX,dy=touch.clientY-_touchStartY;_touchClone.style.left=(rect.left+dx)+'px';_touchClone.style.top=(rect.top+dy)+'px';_touchClone.style.display='none';const el=document.elementFromPoint(touch.clientX,touch.clientY);_touchClone.style.display='';document.querySelectorAll('.drag-over').forEach(e=>e.classList.remove('drag-over'));if(el){const cell=el.closest('.planner-month-cell,.planner-cell,#planner-slots-dropzone');if(cell)cell.classList.add('drag-over');}}
+function plannerTouchEnd(event){if(!_touchClone||!_dragSlotId)return;const touch=event.changedTouches[0];document.body.removeChild(_touchClone);_touchClone=null;if(_touchDragEl)_touchDragEl.style.opacity='';_touchDragEl=null;document.querySelectorAll('.drag-over').forEach(e=>e.classList.remove('drag-over'));const el=document.elementFromPoint(touch.clientX,touch.clientY);if(!el){_dragSlotId=null;_dragFrom=null;_dragFromCell=null;return;}const dropzone=el.closest('#planner-slots-dropzone');if(dropzone){plannerDropBackToPanel({preventDefault:()=>{}});return;}const targetCell=el.closest('.planner-month-cell,.planner-cell');if(targetCell){const ondrop=targetCell.getAttribute('ondrop');if(ondrop){const match=ondrop.match(/plannerDrop\(event,'([^']+)'/);if(match){plannerDrop({preventDefault:()=>{}},match[1],targetCell);return;}}}_dragSlotId=null;_dragFrom=null;_dragFromCell=null;}
+function initPlanner(){}
+
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SUPABASE SYNC
+// ═══════════════════════════════════════════════════════════════════════════
+const SB_URL = 'https://bovajqkybhbcigctnjit.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJvdmFqcWt5YmhiY2lnY3Ruaml0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxNjI3ODksImV4cCI6MjA5MDczODc4OX0._vJt0D3yPlhpmLH-jjBeLJl7sqHTpGuiRlKB4WKP1UM';
+const SB_TABLE = 'planner_data';
+const SB_ROW_KEY = 'sts_planner_all';
+
+let _sbSyncing = false;
+
+function sbHeaders() {
+  return {
+    'apikey': SB_KEY,
+    'Authorization': 'Bearer ' + SB_KEY,
+    'Content-Type': 'application/json',
+    'Prefer': 'return=minimal',
+  };
+}
+
+function sbSetStatus(type, txt) {
+  const dot = document.getElementById('sync-dot');
+  const label = document.getElementById('sync-txt');
+  if(dot) { dot.className = 'sync-dot ' + type; }
+  if(label) label.textContent = txt;
+}
+
+// Collect all planner localStorage keys
+function sbCollect() {
+  const data = {};
+  for(let i=0; i<localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if(k && (k.startsWith('sts_planner_') || k === 'sts_planner_view' || k === 'sts_planner_person')) {
+      data[k] = localStorage.getItem(k);
+    }
+  }
+  return data;
+}
+
+// Upload to Supabase (upsert)
+async function sbUpload() {
+  if(_sbSyncing) return;
+  _sbSyncing = true;
+  sbSetStatus('syncing', 'Salvataggio in corso…');
+  try {
+    const payload = JSON.stringify({
+      key: SB_ROW_KEY,
+      value: JSON.stringify(sbCollect()),
+      updated_at: new Date().toISOString(),
+    });
+    // Try upsert
+    // Try PATCH first (update existing), fallback to POST (insert new)
+    let res = await fetch(
+      `${SB_URL}/rest/v1/${SB_TABLE}?key=eq.${SB_ROW_KEY}`,
+      { method: 'PATCH', headers: sbHeaders(), body: payload }
+    );
+    // If no row existed (204 but 0 rows matched), insert instead
+    if(res.status === 204 || res.ok) {
+      // Check if it actually updated something by trying a select
+      const check = await fetch(
+        `${SB_URL}/rest/v1/${SB_TABLE}?key=eq.${SB_ROW_KEY}&select=key`,
+        { headers: sbHeaders() }
+      );
+      const rows = await check.json();
+      if(!rows.length) {
+        // No existing row — INSERT
+        res = await fetch(`${SB_URL}/rest/v1/${SB_TABLE}`, {
+          method: 'POST',
+          headers: sbHeaders(),
+          body: payload,
+        });
+      }
+    }
+    if(!res.ok) {
+      const err = await res.text();
+      throw new Error('HTTP ' + res.status + ': ' + err.slice(0,100));
+    }
+    const t = new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});
+    sbSetStatus('ok', 'Sincronizzato · ' + t);
+    showToast('✓ Dati salvati su Supabase');
+  } catch(e) {
+    sbSetStatus('error', 'Errore: ' + e.message);
+    showToast('❌ ' + e.message);
+  } finally { _sbSyncing = false; }
+}
+
+// Download from Supabase
+async function sbDownload() {
+  if(_sbSyncing) return;
+  _sbSyncing = true;
+  sbSetStatus('syncing', 'Download in corso…');
+  try {
+    const res = await fetch(
+      `${SB_URL}/rest/v1/${SB_TABLE}?key=eq.${SB_ROW_KEY}&select=value`,
+      { headers: sbHeaders() }
+    );
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    const rows = await res.json();
+    if(!rows.length) {
+      sbSetStatus('ok', 'Nessun dato remoto — carica per primo');
+      showToast('Nessun dato trovato su Supabase');
+      _sbSyncing = false; return;
+    }
+    const data = JSON.parse(rows[0].value);
+    Object.entries(data).forEach(([k,v]) => localStorage.setItem(k,v));
+    const t = new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});
+    sbSetStatus('ok', 'Scaricato · ' + t);
+    showToast('✓ Dati caricati da Supabase');
+    render();
+  } catch(e) {
+    sbSetStatus('error', 'Errore: ' + e.message);
+    showToast('❌ ' + e.message);
+  } finally { _sbSyncing = false; }
+}
+
+// Auto-download on load, auto-upload on every change
+async function sbInit() {
+  sbSetStatus('syncing', 'Connessione…');
+  await sbDownload();
+}
+
+// Patch render() to auto-upload after every change
+const _origRender = render;
+function render() {
+  _origRender();
+  // Debounced auto-save
+  clearTimeout(render._saveTimer);
+  render._saveTimer = setTimeout(() => sbUpload(), 1500);
+}
+render._saveTimer = null;
+
+// ── INIT ────────────────────────────────────────────────────────────────────
+function render() {
+  const content = document.getElementById('content');
+  const saved   = content.scrollTop;
+  content.innerHTML = renderPlannerView();
+  content.scrollTop = saved;
+  setTimeout(initPlanner, 0);
+}
+
+// Patch renderContent(true) calls inside planner JS to call render()
+// (renderContent is used by planner internally)
+function renderContent(p) { render(); }
+
+sbInit();
+</script>
+
+<div id="task-modal-overlay" onclick="if(event.target===this)tmClose()">
+  <div id="task-modal-box">
+    <div class="tm-title" id="tm-title-text">✎ Modifica task</div>
+    <div class="tm-field">
+      <label class="tm-label">Testo task</label>
+      <textarea class="tm-input" id="tm-text" placeholder="Descrivi il task…" rows="3"></textarea>
+    </div>
+    <div class="tm-date-row">
+      <div class="tm-field">
+        <label class="tm-label">Data inizio</label>
+        <input class="tm-input" id="tm-date-start" type="date">
+      </div>
+      <div class="tm-field">
+        <label class="tm-label">Data fine (opzionale)</label>
+        <input class="tm-input" id="tm-date-end" type="date">
+      </div>
+    </div>
+    <div class="tm-field">
+      <label class="tm-label">Colore</label>
+      <div class="tm-color-row">
+        <input type="color" class="tm-color-pick" id="tm-color" value="#818cf8">
+        <div class="tm-color-swatches" id="tm-swatches"></div>
+      </div>
+    </div>
+    <div class="tm-actions">
+      <button class="tm-btn-delete" id="tm-delete-btn" onclick="tmDelete()">🗑 Elimina</button>
+      <button class="tm-btn-cancel" onclick="tmClose()">Annulla</button>
+      <button class="tm-btn-save" onclick="tmSave()">✓ Salva</button>
+    </div>
+  </div>
+</div>
+</body>
+</html>
