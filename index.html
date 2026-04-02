@@ -386,17 +386,16 @@ function tmSave() {
 
 function tmDelete() {
   if(!_tmEditSlotId||!_tmEditPersonId) return;
-  const pid   = _tmEditPersonId;
-  const id    = _tmEditSlotId;
-  const slots = plannerGetSlots(pid);
-  const slot  = slots.find(s=>s.id===id);
-  const cal   = plannerGetCal(pid);
-  if(slot) {
-    _expandSlotDates(slot).forEach(k=>{
-      if(cal[k]){cal[k]=cal[k].filter(i=>i.id!==id);if(!cal[k].length)delete cal[k];}
-    });
-  }
-  plannerSaveSlots(pid, slots.filter(s=>s.id!==id));
+  const pid = _tmEditPersonId;
+  const id  = _tmEditSlotId;
+  // Remove from slots list
+  plannerSaveSlots(pid, plannerGetSlots(pid).filter(s=>s.id!==id));
+  // Remove from ALL calendar keys for this person (scan every key)
+  const cal = plannerGetCal(pid);
+  Object.keys(cal).forEach(k => {
+    cal[k] = cal[k].filter(i => i.id !== id);
+    if(!cal[k].length) delete cal[k];
+  });
   plannerSaveCal(pid, cal);
   tmClose();
   render();
