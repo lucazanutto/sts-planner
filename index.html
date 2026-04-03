@@ -518,11 +518,34 @@ function _renderPlannerWeek(){
   const anchor=new Date(_plannerDate);anchor.setDate(anchor.getDate()-(anchor.getDay()===0?6:anchor.getDay()-1));anchor.setHours(0,0,0,0);
   const dayNames=['Lu','Ma','Me','Gi','Ve','Sa','Do'];
   const hours=[];for(let h=7;h<=23;h++) hours.push(h);
+
+  // Build day columns (date-only keys = all-day tasks)
   let html='<div class="planner-week-grid"><div class="planner-week-hdr"></div>';
-  for(let d=0;d<7;d++){const day=new Date(anchor);day.setDate(anchor.getDate()+d);const isToday=day.getTime()===today.getTime();html+=`<div class="planner-week-hdr${isToday?' today-hdr':''}">${dayNames[d]}<br><span style="font-size:11px;color:${isToday?'var(--accent)':'#888880'}">${day.getDate()}</span></div>`;}
+  for(let d=0;d<7;d++){
+    const day=new Date(anchor);day.setDate(anchor.getDate()+d);
+    const isToday=day.getTime()===today.getTime();
+    const dayKey=_dateKey(day);
+    const allDay=allCals[dayKey]||[];
+    html+=`<div class="planner-week-hdr${isToday?' today-hdr':''}">
+      ${dayNames[d]}<br><span style="font-size:11px;color:${isToday?'var(--accent)':'#888880'}">${day.getDate()}</span>
+      ${allDay.map((item,i)=>`<div class="planner-cell-item" style="background:${item.color};cursor:pointer;margin-top:2px;font-size:9px"
+        draggable="true"
+        ondragstart="plannerDragStart(event,'cell-${dayKey}-${i}','${item.id}')"
+        ontouchstart="plannerTouchStart(event,'cell-${dayKey}-${i}','${item.id}')"
+        ontouchmove="plannerTouchMove(event)" ontouchend="plannerTouchEnd(event)"
+        ondblclick="tmOpenFromCal('${item.id}')"
+        title="${escHtml(item.text)}">${escHtml(item.text.length>12?item.text.slice(0,10)+'…':item.text)}</div>`).join('')}
+    </div>`;
+  }
+
+  // Hour rows
   hours.forEach(h=>{
     html+=`<div class="planner-time-label">${String(h).padStart(2,'0')}:00</div>`;
-    for(let d=0;d<7;d++){const day=new Date(anchor);day.setDate(anchor.getDate()+d);const key=_dateKey(day)+'-h'+h;const isToday=day.getTime()===today.getTime();const items=allCals[key]||[];
+    for(let d=0;d<7;d++){
+      const day=new Date(anchor);day.setDate(anchor.getDate()+d);
+      const key=_dateKey(day)+'-h'+h;
+      const isToday=day.getTime()===today.getTime();
+      const items=allCals[key]||[];
       html+=`<div class="planner-cell${isToday?' today':''}"
         ondragover="event.preventDefault();this.classList.add('drag-over')"
         ondragleave="this.classList.remove('drag-over')"
