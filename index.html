@@ -641,28 +641,12 @@ async function sbUpload() {
       updated_at: new Date().toISOString(),
     });
     // Try upsert
-    // Try PATCH first (update existing), fallback to POST (insert new)
-    let res = await fetch(
-      `${SB_URL}/rest/v1/${SB_TABLE}?key=eq.${SB_ROW_KEY}`,
-      { method: 'PATCH', headers: sbHeaders(), body: payload }
-    );
-    // If no row existed (204 but 0 rows matched), insert instead
-    if(res.status === 204 || res.ok) {
-      // Check if it actually updated something by trying a select
-      const check = await fetch(
-        `${SB_URL}/rest/v1/${SB_TABLE}?key=eq.${SB_ROW_KEY}&select=key`,
-        { headers: sbHeaders() }
-      );
-      const rows = await check.json();
-      if(!rows.length) {
-        // No existing row — INSERT
-        res = await fetch(`${SB_URL}/rest/v1/${SB_TABLE}`, {
-          method: 'POST',
-          headers: sbHeaders(),
-          body: payload,
-        });
-      }
-    }
+    // Supabase upsert: POST with merge-duplicates
+    const res = await fetch(`${SB_URL}/rest/v1/${SB_TABLE}`, {
+      method: 'POST',
+      headers: { ...sbHeaders(), 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+      body: payload,
+    });
     if(!res.ok) {
       const err = await res.text();
       throw new Error('HTTP ' + res.status + ': ' + err.slice(0,100));
@@ -711,27 +695,19 @@ async function sbInit() {
   await sbDownload();
 }
 
-// Patch render() to auto-upload after every change
-const _origRender = render;
-function render() {
-  _origRender();
-  // Debounced auto-save
-  clearTimeout(render._saveTimer);
-  render._saveTimer = setTimeout(() => sbUpload(), 1500);
-}
-render._saveTimer = null;
-
 // ── INIT ────────────────────────────────────────────────────────────────────
+let _sbSaveTimer = null;
 function render() {
   const content = document.getElementById('content');
   const saved   = content.scrollTop;
   content.innerHTML = renderPlannerView();
   content.scrollTop = saved;
   setTimeout(initPlanner, 0);
+  // Auto-save debounced
+  clearTimeout(_sbSaveTimer);
+  _sbSaveTimer = setTimeout(() => sbUpload(), 2000);
 }
 
-// Patch renderContent(true) calls inside planner JS to call render()
-// (renderContent is used by planner internally)
 function renderContent(p) { render(); }
 
 sbInit();
