@@ -630,6 +630,34 @@ function sbCollect() {
 }
 
 // Upload to Supabase (upsert)
+async function _sbUpsert(url, key, payload, headers) {
+  // Step 1: try to update existing row
+  const patchRes = await fetch(url + '?key=eq.' + key, {
+    method: 'PATCH',
+    headers: headers,
+    body: payload,
+  });
+  if(!patchRes.ok) throw new Error('PATCH HTTP ' + patchRes.status);
+  
+  // Step 2: check if row existed (Supabase returns empty array if no match)
+  const checkRes = await fetch(url + '?key=eq.' + key + '&select=key', { headers: headers });
+  if(!checkRes.ok) throw new Error('CHECK HTTP ' + checkRes.status);
+  const rows = await checkRes.json();
+  
+  if(!rows || rows.length === 0) {
+    // Row doesn't exist yet — INSERT
+    const insertRes = await fetch(url, {
+      method: 'POST',
+      headers: { ...headers, 'Prefer': 'return=minimal' },
+      body: payload,
+    });
+    if(!insertRes.ok) {
+      const e = await insertRes.text();
+      throw new Error('INSERT HTTP ' + insertRes.status + ' ' + e.slice(0,80));
+    }
+  }
+}
+
 async function sbUpload() {
   if(_sbSyncing) return;
   _sbSyncing = true;
@@ -642,15 +670,10 @@ async function sbUpload() {
     });
     // Try upsert
     // Supabase upsert: POST with merge-duplicates
-    const res = await fetch(`${SB_URL}/rest/v1/${SB_TABLE}`, {
-      method: 'POST',
-      headers: { ...sbHeaders(), 'Prefer': 'resolution=merge-duplicates,return=minimal' },
-      body: payload,
-    });
-    if(!res.ok) {
-      const err = await res.text();
-      throw new Error('HTTP ' + res.status + ': ' + err.slice(0,100));
-    }
+    await _sbUpsert(
+      `${SB_URL}/rest/v1/${SB_TABLE}`,
+      SB_ROW_KEY, payload, sbHeaders()
+    );
     const t = new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});
     sbSetStatus('ok', 'Sincronizzato · ' + t);
     showToast('✓ Dati salvati su Supabase');
